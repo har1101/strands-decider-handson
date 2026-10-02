@@ -193,6 +193,8 @@ curl -s localhost:8000/v1/systemone \
 
 Amazon Bedrock の LLM を使うため、Bedrock にアクセスできる AWS 認証情報が必要。
 
+> **`NoRegionError: You must specify a region.` が出る場合**: `aws login` で作った認証情報(`login_session`)は、期限が切れると botocore が自動で更新する。この更新用クライアントは `AWS_REGION` を見ず、`AWS_DEFAULT_REGION` かプロファイルの `region` を使う。`export AWS_DEFAULT_REGION=ap-northeast-1`(または `aws configure set region ap-northeast-1`)を設定しておく。
+
 ```bash
 git clone https://github.com/strands-labs/strands-decider && cd strands-decider
 uv pip install -e . strands-agents
@@ -246,9 +248,7 @@ QUESTIONS = {
 
 **観察ポイント**: ユーザーの発言に都市名を含めたときに `Proceed` へ変わるか。しきい値を変えると挙動がどう変わるか。
 
-## Step 4(任意): 自分のユースケースで試す
-
-### 例: LLM で回答するか、人間にエスカレーションするかを振り分ける
+## Step 4: LLM で回答するか、人間にエスカレーションするかを振り分ける
 
 サポート問い合わせを、エージェントが LLM を呼ぶ**前**に Decider で振り分ける。人間に回す問い合わせでは LLM を一度も呼ばない。サンプルはハンズオンのルートにある `step4_escalation_gate.py`。
 
@@ -304,14 +304,176 @@ USER: I was charged twice for order #1234. Refund me now.
 - `パスワードを忘れました。どうすればいいですか？` は `confidence=0.074` と低く、`p_human=0.463` で LLM 側に振られる。しきい値 `HUMAN` を下げたり、「confidence が低ければ人間へ」という条件を足したりすると、振り分けがどう変わるか。
 - 選択肢の説明文(`criteria`)を書き換えると確率がどう動くか。
 
-### 発展: ツール呼び出し単位で人間の承認を挟む
+## Step 5: どの LLM に答えさせるかを決める(モデルルーティング)
 
-Strands には、ツール呼び出しの前に人間の承認を挟む純正の `HumanInTheLoop`(`strands.vended_interventions.hitl`)がある。`classifier` に任意の関数(`BeforeToolCallEvent` を受け取り `ClassifierResult` を返す)を渡せるので、組み込みの LLM リスク判定の代わりに Decider を使える。承認待ちは interrupt/resume(デフォルト)か `ask="stdio"` で受け付ける。
+依頼の難しさを Decider で判定し、簡単なら Claude Haiku 4.5、難しいなら Claude Sonnet 4.6 に答えさせる。サンプルは `step5_model_router.py`。
 
-### その他のアイデア
+| 使う機能 | 役割 |
+| --- | --- |
+| `ModelRouter` | 候補モデルの中から invocation ごとに 1 つを選んで使う。`Agent(model=router)` として渡す |
+| `RoutingCandidate` | 候補モデルに名前(`fast` / `strong`)を付ける。先頭の候補が既定値 |
+| `RoutingStrategy.select` | どの候補を使うかを決める非同期メソッド。ここで Decider に問い合わせる |
 
-- ツール選択、モデルルーティング、ガードレールなどの質問を自分で作る。
+Strands 純正の `ClassifierStrategy` は、この判定自体を LLM に問い合わせる。Decider に置き換えると、判定がローカルの 1 回の forward pass で済む。`ModelRouter` は Strands 側で provisional(暫定)API とされている。
+
+```python
+QUESTIONS = {
+    "model": Decider.choice(
+        "Which model should handle this request?",
+        {
+            "fast": "a small fast model is enough: greetings, short replies, translation of a phrase, ...",
+            "strong": "needs a strong reasoning model: multi-step analysis, design, debugging, planning, ...",
+        },
+    ),
+}
+
+class DeciderStrategy:
+    async def select(self, context, **kwargs):
+        if context.attempts:  # 失敗後の再選択では切り替えない
+            return None
+        answer = (await asyncio.to_thread(self._decider.ask, latest_user_text(context), QUESTIONS))["model"]
+        return next(c for c in context.candidates if c.name == answer["choice"])
+```
+
+```bash
+python step5_model_router.py                                   # 組み込みのサンプル依頼 4 件を順に流す
+python step5_model_router.py "この文を英訳して: 了解です"     # 任意の依頼を 1 件流す
+```
+
+Lambda MicroVM(CPU)での実行例(抜粋):
+
+```text
+USER: Translate 'good morning' into French.
+  [router] fast -> jp.anthropic.claude-haiku-4-5-20251001-v1:0 confidence=0.955 decider=1386ms
+  [llm] total=2.3s input_tokens=39 output_tokens=40
+
+USER: Debug why async Python code deadlocks when two tasks acquire two locks in a different order, and propose a fix.
+  [router] strong -> jp.anthropic.claude-sonnet-4-6 confidence=0.938 decider=1498ms
+  [llm] total=16.8s input_tokens=54 output_tokens=1465
+```
+
+- 4 件とも意図どおりに振り分けられた(翻訳と言い換えは Haiku、デバッグとフェルミ推定は Sonnet)。
+- 実際にどのモデルが使われたかは、ロガー `strands.models.routing` を INFO レベルにすると `candidate selected` のログで確認できる。
+- `RoutingStrategy.select` は `async def` 必須。Decider クライアントは同期なので `asyncio.to_thread` で包む。
+
+**観察ポイント**: `『承知しました』を丁寧なビジネスメールの一文に言い換えて` は confidence 0.737 と、ほかより低い。境界にありそうな依頼(短いが専門的な質問など)を投げると、どちらに振られるか。
+
+## Step 6: どのエージェントに渡すかを決める(Graph の条件付きエッジ)
+
+受付エージェントが問い合わせを 1 文の英語チケットに要約し、Decider がそのチケットを請求・技術・営業の担当エージェントに振り分ける。ワークフローの形はコードで固定し、分岐の判断だけを Decider に任せる。サンプルは `step6_graph_routing.py`。
+
+```text
+受付(intake) ──[Decider: billing?]──> 請求担当(billing)
+             ├─[Decider: tech?]─────> 技術担当(tech)
+             └─[Decider: sales?]────> 営業担当(sales)
+```
+
+| 使う機能 | 役割 |
+| --- | --- |
+| `GraphBuilder.add_node` | エージェントをノードとして登録する |
+| `GraphBuilder.add_edge(condition=...)` | 条件関数が `True` を返したエッジだけを辿る。ここで Decider に問い合わせる |
+| `GraphState.results` | 条件関数の中で、前のノード(受付)の出力を読む |
+
+```python
+@lru_cache(maxsize=128)
+def route(ticket: str) -> str:
+    return decider.ask(f"Support ticket: {ticket}", QUESTIONS)["team"]["choice"]
+
+def routed_to(team):
+    def condition(state: GraphState) -> bool:
+        return route(str(state.results["intake"].result).strip()) == team
+    return condition
+
+for team in TEAMS:
+    builder.add_edge("intake", team, condition=routed_to(team))
+```
+
+```bash
+python step6_graph_routing.py                                 # 組み込みのサンプル問い合わせ 3 件を順に流す
+python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
+```
+
+Lambda MicroVM(CPU)での実行例(抜粋):
+
+```text
+USER: ログインすると500エラーが出ます
+  [intake] User cannot log in due to a 500 server error.
+  [route] tech confidence=0.975 decider=1417ms path=intake -> tech
+  [tech] ご報告ありがとうございます。ログイン時の500エラーについて確認させていただきたいのですが、...
+```
+
+- 3 件とも意図どおりの担当に届いた(confidence 0.90〜0.98)。
+- 条件関数はエッジごとに呼ばれる(3 本なら 3 回)。同じ要約文の判定は `lru_cache` でキャッシュし、Decider の呼び出しを 1 問い合わせ 1 回に抑えている。
+- 受付エージェントに英語で要約させているのは、Decider の学習データが英語中心だから。要約がそのまま社内チケットの件名にもなる。
+
+**観察ポイント**: `TEAMS` に担当(例: `account`: ログイン・パスワード・アカウント設定)を足すと、ノードとエッジが増えるだけで振り分けが変わる。どの問い合わせの担当が入れ替わるか。
+
+## Step 7: ツールを実行してよいかを決める(HumanInTheLoop)
+
+エージェントのツール呼び出しを Decider が見て、読むだけの操作は自動で実行し、変更や外部送信を伴う操作だけ人間に承認を求める。サンプルは `step7_tool_approval.py`。ツールはすべて偽物で、メモリ上の辞書を読み書きするだけ。
+
+| 使う機能 | 役割 |
+| --- | --- |
+| `HumanInTheLoop` | ツール実行前に人間の承認を挟む Strands 純正の intervention |
+| `classifier=` | 承認が要るかを判定する関数。`BeforeToolCallEvent` を受け取り `ClassifierResult` を返す。ここで Decider に問い合わせる |
+| `ask="stdio"` | 承認をターミナルで y/n 入力で受け付ける |
+
+`classifier=True` にすると純正の LLM リスク判定が使われる。Decider に置き換えると、判定がローカルの 1 回の forward pass で済む。`ClassifierResult` は `strands.vended_interventions.hitl` からは import できず、`strands.vended_interventions.hitl.classifier` から import する。
+
+```python
+def decider_classifier(event, **kwargs) -> ClassifierResult:
+    tool_use = event.tool_use
+    state = f"tool={tool_use['name']}\ninput={json.dumps(tool_use['input'], ensure_ascii=False)}"
+    p = decider.ask(state, QUESTIONS)["needs_approval"]["noul"]
+    return ClassifierResult(requires_human_in_the_loop=p >= 0.5, reason=f"Decider p={p:.2f}")
+
+agent = Agent(
+    tools=[list_files, read_file, send_email, delete_file],
+    interventions=[HumanInTheLoop(classifier=decider_classifier, ask="stdio")],
+)
+```
+
+```bash
+python step7_tool_approval.py   # 承認を求められたら y/n で答える
+```
+
+Lambda MicroVM(CPU)での実行例。メール送信は `y`、ファイル削除は `n` と答えた:
+
+```text
+USER: docs フォルダのファイルを確認して README を要約し、alice@example.com にメールで送って。そのあと tmp/old.log を削除して。
+
+  [decider] list_files p=0.08 -> auto (1497ms)
+  [decider] read_file p=0.10 -> auto (1501ms)
+  [decider] send_email p=0.68 -> ask human (2307ms)
+Approve "send_email" — Decider p=0.68?
+  Input: {"to": "alice@example.com", ...} (y/n): y
+  [decider] delete_file p=0.69 -> ask human (1505ms)
+Approve "delete_file" — Decider p=0.69?
+  Input: {"path": "tmp/old.log"} (y/n): n
+  [tool] send_email to=alice@example.com subject='README 要約'
+
+remaining files: ['docs/CHANGELOG.md', 'docs/README.md', 'tmp/old.log']
+```
+
+- 読むだけの `list_files` / `read_file` は承認なしで実行され、`send_email` と `delete_file` だけ承認を求められた。`n` と答えた削除は実行されず、ファイルは残った。
+- 承認プロンプトの `Input:` は `HumanInTheLoop` が `json.dumps` で表示するため、日本語は `\uXXXX` にエスケープされて見える。
+
+**観察ポイント**: 選択肢の説明文(`criteria`)の書き方で結果が変わる。最初に試した次の質問では、全社員宛ての `send_email` を「承認不要」(p=0.31)と判定した。
+
+```python
+Decider.noul("Should a human approve this tool call before it runs?", {
+    "true": "the call is destructive, irreversible, sends data outside, moves money, or touches sensitive files",
+    "false": "the call only reads or lists non-sensitive information and is safe to run automatically",
+})
+```
+
+サンプルの質問のように「何かを変更するか、外部に送るか」を問い、`true` 側にメール送信を明記すると、10 件のテストケースがすべて正しく判定された。
+
+## Step 8(任意): 自分のユースケースで試す
+
+- ツール選択、ガードレール、ポリシー分類などの質問を自分で作る。
 - 判定をエージェントのループに入れてもレイテンシが許容範囲に収まるかを測る。
+- 話題に合ったポリシーだけを system prompt に差し込む(`ContextInjector` の `render_content` で Decider の `choice` を使う)。
 
 ## スコープ外
 
