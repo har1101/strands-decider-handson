@@ -8,9 +8,9 @@ Strands の純正機能 ``ModelRouter`` に、Decider で判定する ``RoutingS
 純正の ``ClassifierStrategy`` は、この判定自体を LLM に問い合わせる。Decider に置き換えると、判定がローカルの 1 回の
 forward pass で済む。
 
-    uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
-    uv run python step5_model_router.py                       # 組み込みのサンプル依頼を順に流す
-    uv run python step5_model_router.py "この文を英訳して: 了解です"  # 任意の依頼を 1 件流す
+    strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+    python step5_model_router.py                       # 組み込みのサンプル依頼を順に流す
+    python step5_model_router.py "この文を英訳して: 了解です"  # 任意の依頼を 1 件流す
 
 質問文・選択肢・方針はハンズオン用の例。``ModelRouter`` は Strands 側で provisional(暫定)API とされている。
 """

@@ -16,10 +16,13 @@
 
 ```bash
 git clone https://github.com/har1101/strands-decider-handson && cd strands-decider-handson
+uv venv -p 3.12 && source .venv/bin/activate
+uv pip install strands-decider
+
 # Lambda MicroVM などの aarch64 環境では必須(理由は HANDSON.md「推論が止まる場合」)
 export NVPL_BLAS_DEBUG_CPU_TYPE=1
 
-uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "Help! My payouts have been failing for 3 days!" \
   --choice "Which team should handle this?=billing,sales,retail"
 ```
