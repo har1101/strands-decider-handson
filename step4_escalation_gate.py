@@ -7,9 +7,9 @@ Strands の純正機能だけで分岐させる:
 - ``Deny``: invocation をキャンセルする。LLM は一度も呼ばれず、``reason`` がアシスタントの返答になる。
 - ``agent.state``: 判定結果を呼び出し側に渡す。
 
-    strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
-    python step4_escalation_gate.py                      # 組み込みのサンプル問い合わせを順に流す
-    python step4_escalation_gate.py "返金してください"    # 任意の問い合わせを 1 件流す
+    uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+    uv run python step4_escalation_gate.py                      # 組み込みのサンプル問い合わせを順に流す
+    uv run python step4_escalation_gate.py "返金してください"    # 任意の問い合わせを 1 件流す
 
 質問文・しきい値・方針はハンズオン用の例。実トラフィックに合わせて調整すること。
 """

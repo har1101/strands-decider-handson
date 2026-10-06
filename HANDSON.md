@@ -24,7 +24,7 @@ Strands Decider 2B を CLI → HTTP サーバー → Strands エージェント�
 
 | 項目 | 要件 | 備考 |
 | --- | --- | --- |
-| Python | 3.10 以上 | `pyproject.toml` の `requires-python = ">=3.10"` |
+| Python | 3.14 | `uv run` が自動で用意する(`.python-version` と `pyproject.toml` で固定) |
 | ディスク | 10GB 程度の空き | 1.9B パラメータの重みは bf16 で約 3.8GB。これに torch などが加わる |
 | メモリ | 8GB 以上を推奨 | fp32 で読み込むと重みだけで約 7.6GB |
 | GPU | 不要 | CPU でも推論できる。レイテンシは GPU より遅くなる |
@@ -68,16 +68,12 @@ export NVPL_BLAS_DEBUG_CPU_TYPE=1
 影響を受けるかどうかは、次のコマンドで確認できる。10 秒以内に `ok` が出なければ影響を受けている。
 
 ```bash
-timeout 10 python -c "import torch; print('ok', (torch.rand(32,1) @ torch.rand(1,20)).shape)"
+timeout 10 uv run python -c "import torch; print('ok', (torch.rand(32,1) @ torch.rand(1,20)).shape)"
 ```
 
-### Python 環境の作成
+### Python 環境の準備
 
-```bash
-uv venv -p 3.12
-source .venv/bin/activate
-uv pip install strands-decider
-```
+手作業は不要。このリポジトリには `pyproject.toml` と `.python-version` があるので、以降のコマンドを `uv run` で実行すると、初回に Python 3.14 と依存パッケージ(`strands-decider`、`strands-agents`)が自動で入る。仮想環境の作成や `source .venv/bin/activate` は要らない。
 
 ## Step 1: CLI で 3 種類の質問を試す
 
@@ -86,7 +82,7 @@ AWS は不要。初回実行時に Hugging Face からモデルがダウンロ�
 ### choice(選択)
 
 ```bash
-strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "Help! My payouts have been failing for 3 days!" \
   --choice "Which team should handle this?=billing,sales,retail"
 ```
@@ -103,7 +99,7 @@ choice_0 -> billing (confidence 0.768)
 ### noul(Yes/No)
 
 ```bash
-strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "Help! My payouts have been failing for 3 days!" \
   --noul "Does this convey urgency?"
 ```
@@ -115,7 +111,7 @@ noul_0 noul = 0.828
 ### score(採点)
 
 ```bash
-strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "Help! My payouts have been failing for 3 days!" \
   --score "How frustrated is the writer?=calm,frustrated,depressed"
 ```
@@ -132,7 +128,7 @@ score_0 score = 1.10 (confidence 0.518)
 state の読み込みが 1 回で済むので効率的。
 
 ```bash
-strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "Help! My payouts have been failing for 3 days!" \
   --choice "Which team should handle this?=billing,sales,retail" \
   --noul "Does this convey urgency?" \
@@ -142,7 +138,7 @@ strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
 **観察ポイント**: state や選択肢を変えると confidence がどう動くか。
 
 ```bash
-strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
+uv run strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
   --state "AIが書いたブログが氾濫する世の中になってしまいました" \
   --choice "どうするべき？=自分もAIブログで対抗する,温もりあふれる人手ブログを極める,気にしない" \
   --noul "AIが書いたブログを一切の推敲なしに世の中に出していいですか？" \
@@ -152,7 +148,7 @@ strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
 ## Step 2: HTTP サーバーとして起動する
 
 ```bash
-strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8000
+uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8000
 ```
 
 別のターミナルから:
@@ -196,15 +192,14 @@ Amazon Bedrock の LLM を使うため、Bedrock にアクセスできる AWS �
 > **`NoRegionError: You must specify a region.` が出る場合**: `aws login` で作った認証情報(`login_session`)は、期限が切れると botocore が自動で更新する。この更新用クライアントは `AWS_REGION` を見ず、`AWS_DEFAULT_REGION` かプロファイルの `region` を使う。`export AWS_DEFAULT_REGION=ap-northeast-1`(または `aws configure set region ap-northeast-1`)を設定しておく。
 
 ```bash
-git clone https://github.com/strands-labs/strands-decider && cd strands-decider
-uv pip install -e . strands-agents
-strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+git clone https://github.com/strands-labs/strands-decider
+uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
 ```
 
 別のターミナルから:
 
 ```bash
-python examples/strands/tool_call_intervention.py
+uv run python strands-decider/examples/strands/tool_call_intervention.py
 ```
 
 サンプルはポート 8099 のサーバーを使う。変えるときは `STRANDS_DECIDER_URL` で指定する。
@@ -278,8 +273,8 @@ QUESTIONS = {
 Step 3 と同じくポート 8099 でサーバーを起動しておき、ハンズオンのルートで実行する。
 
 ```bash
-python step4_escalation_gate.py                    # 組み込みのサンプル問い合わせ 5 件を順に流す
-python step4_escalation_gate.py "返金してください"  # 任意の問い合わせを 1 件流す
+uv run python step4_escalation_gate.py                    # 組み込みのサンプル問い合わせ 5 件を順に流す
+uv run python step4_escalation_gate.py "返金してください"  # 任意の問い合わせを 1 件流す
 ```
 
 Lambda MicroVM(CPU)での実行例(抜粋):
@@ -336,8 +331,8 @@ class DeciderStrategy:
 ```
 
 ```bash
-python step5_model_router.py                                   # 組み込みのサンプル依頼 4 件を順に流す
-python step5_model_router.py "この文を英訳して: 了解です"     # 任意の依頼を 1 件流す
+uv run python step5_model_router.py                                   # 組み込みのサンプル依頼 4 件を順に流す
+uv run python step5_model_router.py "この文を英訳して: 了解です"     # 任意の依頼を 1 件流す
 ```
 
 Lambda MicroVM(CPU)での実行例(抜粋):
@@ -389,8 +384,8 @@ for team in TEAMS:
 ```
 
 ```bash
-python step6_graph_routing.py                                 # 組み込みのサンプル問い合わせ 3 件を順に流す
-python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
+uv run python step6_graph_routing.py                                 # 組み込みのサンプル問い合わせ 3 件を順に流す
+uv run python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
 ```
 
 Lambda MicroVM(CPU)での実行例(抜粋):
@@ -434,7 +429,7 @@ agent = Agent(
 ```
 
 ```bash
-python step7_tool_approval.py   # 承認を求められたら y/n で答える
+uv run python step7_tool_approval.py   # 承認を求められたら y/n で答える
 ```
 
 Lambda MicroVM(CPU)での実行例。メール送信は `y`、ファイル削除は `n` と答えた:

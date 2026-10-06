@@ -9,9 +9,9 @@ Strands の純正機能 ``HumanInTheLoop`` の ``classifier`` に、Decider で�
 ``classifier=True`` にすると純正の LLM リスク判定が使われる。Decider に置き換えると、判定がローカルの 1 回の forward
 pass で済む。
 
-    strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
-    python step7_tool_approval.py               # 組み込みの依頼を流す。承認を求められたら y/n で答える
-    python step7_tool_approval.py "README を読んで要約して"  # 任意の依頼を流す
+    uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+    uv run python step7_tool_approval.py               # 組み込みの依頼を流す。承認を求められたら y/n で答える
+    uv run python step7_tool_approval.py "README を読んで要約して"  # 任意の依頼を流す
 
 ツールはすべて偽物(メモリ上の辞書を読み書きするだけ)。質問文・しきい値・方針はハンズオン用の例。
 """

@@ -11,9 +11,9 @@ Strands の純正機能 ``Graph`` で、受付 → 専門担当のワークフ�
                  ├─[Decider: tech?]─────> 技術担当(tech)
                  └─[Decider: sales?]────> 営業担当(sales)
 
-    strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
-    python step6_graph_routing.py                          # 組み込みのサンプル問い合わせを順に流す
-    python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
+    uv run strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
+    uv run python step6_graph_routing.py                          # 組み込みのサンプル問い合わせを順に流す
+    uv run python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
 
 質問文・選択肢・方針はハンズオン用の例。
 """
