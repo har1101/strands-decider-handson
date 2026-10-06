@@ -74,7 +74,7 @@ timeout 10 python -c "import torch; print('ok', (torch.rand(32,1) @ torch.rand(1
 ### Python 環境の作成
 
 ```bash
-uv venv -p 3.12
+uv venv -p 3.14
 source .venv/bin/activate
 uv pip install strands-decider
 ```

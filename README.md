@@ -16,7 +16,7 @@
 
 ```bash
 git clone https://github.com/har1101/strands-decider-handson && cd strands-decider-handson
-uv venv -p 3.12 && source .venv/bin/activate
+uv venv -p 3.14 && source .venv/bin/activate
 uv pip install strands-decider
 
 # Lambda MicroVM などの aarch64 環境では必須(理由は HANDSON.md「推論が止まる場合」)
