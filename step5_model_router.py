@@ -32,19 +32,19 @@ from strands.models.routing import ModelRouter, RoutingCandidate, RoutingContext
 FAST_MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 STRONG_MODEL_ID = "jp.anthropic.claude-sonnet-4-6"
 
-SYSTEM_PROMPT = "You are a helpful assistant. Answer in the user's language, as concisely as the request allows."
+SYSTEM_PROMPT = "あなたは親切なアシスタントです。ユーザーの言語で、依頼が許す範囲でできるだけ簡潔に答えてください。"
 
 QUESTIONS = {
     "model": Decider.choice(
-        "Which model should handle this request?",
+        "この依頼は、どのモデルが対応すべきですか？",
         {
-            "fast": (
-                "a small fast model is enough: greetings, short replies, translation of a phrase, "
-                "simple lookups or formatting"
+            "軽量": (
+                "小さくて速いモデルで十分な依頼。あいさつ、短い返答、フレーズの翻訳、"
+                "簡単な調べ物や書式の整形"
             ),
-            "strong": (
-                "needs a strong reasoning model: multi-step analysis, design, debugging, planning, "
-                "long structured writing"
+            "高性能": (
+                "推論力の高いモデルが必要な依頼。複数の手順にわたる分析、設計、デバッグ、計画、"
+                "長い構造化された文章の作成"
             ),
         },
     ),
@@ -83,9 +83,9 @@ class DeciderStrategy:
 
 
 SAMPLE_REQUESTS = [
-    "Translate 'good morning' into French.",
+    "「おはよう」をフランス語に訳して",
     "『承知しました』を丁寧なビジネスメールの一文に言い換えて",
-    "Debug why async Python code deadlocks when two tasks acquire two locks in a different order, and propose a fix.",
+    "2つのタスクが2つのロックを逆の順番で取得すると、非同期のPythonコードがデッドロックする原因を調べて、修正案を出して",
     "新規事業の市場規模をフェルミ推定し、前提と感度分析も含めて説明して",
 ]
 
@@ -102,8 +102,8 @@ def main() -> int:
     # 先頭の候補が既定値。strategy が None を返したときはこれが使われる。
     router = ModelRouter(
         [
-            RoutingCandidate(BedrockModel(model_id=FAST_MODEL_ID), name="fast"),
-            RoutingCandidate(BedrockModel(model_id=STRONG_MODEL_ID), name="strong"),
+            RoutingCandidate(BedrockModel(model_id=FAST_MODEL_ID), name="軽量"),
+            RoutingCandidate(BedrockModel(model_id=STRONG_MODEL_ID), name="高性能"),
         ],
         strategy=strategy,
     )
@@ -114,7 +114,7 @@ def main() -> int:
         result = agent(message)
         elapsed = time.perf_counter() - started
         usage = result.metrics.accumulated_usage
-        model_id = FAST_MODEL_ID if strategy.last["choice"] == "fast" else STRONG_MODEL_ID
+        model_id = FAST_MODEL_ID if strategy.last["choice"] == "軽量" else STRONG_MODEL_ID
 
         print(f"USER: {message}")
         print(

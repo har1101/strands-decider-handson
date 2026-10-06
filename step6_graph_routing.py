@@ -34,29 +34,29 @@ from strands.multiagent.graph import GraphState  # noqa: E402
 MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 INTAKE_PROMPT = (
-    "You are a support intake clerk. Rewrite the customer's message as one short English sentence "
-    "describing their issue, for the internal ticket. Output only that sentence."
+    "あなたはサポートの受付担当です。お客様のメッセージを、社内チケット用に、"
+    "問い合わせ内容を表す短い1文の日本語に書き直してください。その1文だけを出力してください。"
 )
 
 TEAMS = {
-    "billing": "charges, invoices, payments, refunds",
-    "tech": "bugs, errors, crashes, technical problems using the product",
-    "sales": "pricing questions, quotes, discounts, upgrading or buying plans",
+    "請求": "請求、請求書、支払い、返金",
+    "技術": "バグ、エラー、クラッシュなど、製品を使うときの技術的な問題",
+    "営業": "価格の質問、見積もり、割引、プランの購入やアップグレード",
 }
 
 TEAM_PROMPTS = {
-    "billing": "You are the billing team of a SaaS company.",
-    "tech": "You are the technical support team of a SaaS company.",
-    "sales": "You are the sales team of a SaaS company.",
+    "請求": "あなたは SaaS 企業の請求担当チームです。",
+    "技術": "あなたは SaaS 企業の技術サポートチームです。",
+    "営業": "あなたは SaaS 企業の営業チームです。",
 }
 
 REPLY_RULES = (
-    " Reply to the customer's original message in the customer's language, in 3 sentences or fewer. "
-    "Ask for any information you need to proceed."
+    " お客様の元のメッセージに、お客様の言語で、3文以内で返信してください。"
+    "対応に必要な情報があれば、お客様に尋ねてください。"
 )
 
 QUESTIONS = {
-    "team": Decider.choice("Which team should handle this customer support ticket?", TEAMS),
+    "team": Decider.choice("このサポートチケットは、どのチームが対応すべきですか？", TEAMS),
 }
 
 decider = Decider()
@@ -69,7 +69,7 @@ def route(ticket: str) -> str:
 
     条件関数はエッジごとに呼ばれる(3 本なら 3 回)ので、同じ要約文の判定はキャッシュして Decider を 1 回で済ませる。
     """
-    answer = decider.ask(f"Support ticket: {ticket}", QUESTIONS)["team"]
+    answer = decider.ask(f"サポートチケット: {ticket}", QUESTIONS)["team"]
     decisions[ticket] = {
         "team": answer["choice"],
         "confidence": round(answer["confidence"], 3),
@@ -82,25 +82,25 @@ def routed_to(team: str):
     """受付ノードの出力を Decider が ``team`` に振り分けたときだけ True を返す条件関数を作る。"""
 
     def condition(state: GraphState) -> bool:
-        return route(str(state.results["intake"].result).strip()) == team
+        return route(str(state.results["受付"].result).strip()) == team
 
     return condition
 
 
 def build_graph():
     builder = GraphBuilder()
-    builder.add_node(Agent(model=MODEL_ID, system_prompt=INTAKE_PROMPT, callback_handler=None), "intake")
+    builder.add_node(Agent(model=MODEL_ID, system_prompt=INTAKE_PROMPT, callback_handler=None), "受付")
     for team in TEAMS:
         agent = Agent(model=MODEL_ID, system_prompt=TEAM_PROMPTS[team] + REPLY_RULES, callback_handler=None)
         builder.add_node(agent, team)
-        builder.add_edge("intake", team, condition=routed_to(team))
-    builder.set_entry_point("intake")
+        builder.add_edge("受付", team, condition=routed_to(team))
+    builder.set_entry_point("受付")
     builder.set_max_node_executions(2)  # 受付 1 回 + 担当 1 回
     return builder.build()
 
 
 SAMPLE_REQUESTS = [
-    "My credit card was charged twice this month.",
+    "今月、クレジットカードに二重で請求されています。",
     "ログインすると500エラーが出ます",
     "エンタープライズプランを200席で使いたいので見積もりが欲しいです",
 ]
@@ -115,12 +115,12 @@ def main() -> int:
 
     for message in sys.argv[1:] or SAMPLE_REQUESTS:
         result = build_graph()(message)
-        ticket = str(result.results["intake"].result).strip()
+        ticket = str(result.results["受付"].result).strip()
         decision = decisions[ticket]
         path = " -> ".join(node.node_id for node in result.execution_order)
 
         print(f"USER: {message}")
-        print(f"  [intake] {ticket}")
+        print(f"  [受付] {ticket}")
         print(
             f"  [route] {decision['team']} confidence={decision['confidence']} "
             f"decider={decision['decider_ms']:.0f}ms path={path}"

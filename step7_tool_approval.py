@@ -32,17 +32,17 @@ from strands.vended_interventions.hitl.classifier import ClassifierResult  # noq
 
 MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
-SYSTEM_PROMPT = "You are an office assistant. Use the tools to complete the user's request, then report what you did."
+SYSTEM_PROMPT = "あなたは事務アシスタントです。ツールを使ってユーザーの依頼を完了し、何をしたかを報告してください。"
 
 QUESTIONS = {
     "needs_approval": Decider.noul(
-        "Does this tool call change anything or send anything outside, so a human should approve it first?",
+        "このツール呼び出しは、何かを変更する、または外部に何かを送るため、先に人間が承認すべきですか？",
         {
             "true": (
-                "it deletes, modifies or writes data, sends a message or email to anyone, moves money, "
-                "or runs a state-changing command"
+                "データの削除・変更・書き込み、誰かへのメッセージやメールの送信、送金、"
+                "状態を変えるコマンドの実行を行う"
             ),
-            "false": "it only reads, lists or searches information without changing anything or contacting anyone",
+            "false": "情報の読み取り、一覧表示、検索だけを行い、何も変更せず、誰にも連絡しない",
         },
     ),
 }
@@ -56,7 +56,7 @@ decider = Decider()
 def decider_classifier(event: BeforeToolCallEvent, **kwargs) -> ClassifierResult:
     """ツール名と引数だけを Decider に見せて、人間の承認が要るかを判定する。"""
     tool_use = event.tool_use
-    state = f"tool={tool_use['name']}\ninput={json.dumps(tool_use['input'], ensure_ascii=False)}"
+    state = f"ツール名: {tool_use['name']}\n入力: {json.dumps(tool_use['input'], ensure_ascii=False)}"
     p = decider.ask(state, QUESTIONS)["needs_approval"]["noul"]
     verdict = "ask human" if p >= APPROVAL else "auto"
     print(f"  [decider] {tool_use['name']} p={p:.2f} -> {verdict} ({decider.last_latency_ms:.0f}ms)")
@@ -66,37 +66,37 @@ def decider_classifier(event: BeforeToolCallEvent, **kwargs) -> ClassifierResult
 # ---- 偽物のツール ---------------------------------------------------------------
 
 FILES = {
-    "docs/README.md": "Strands Decider is a 2B decision model. It answers yes/no, choice and score questions.",
-    "docs/CHANGELOG.md": "v19: added answer-adequacy training data.",
-    "tmp/old.log": "debug log from last month",
+    "docs/README.md": "Strands Decider は 2B の判定モデルです。yes/no、選択、スコアの質問に答えます。",
+    "docs/CHANGELOG.md": "v19: 回答の妥当性に関する学習データを追加。",
+    "tmp/old.log": "先月のデバッグログ",
 }
 
 
 @tool
 def list_files(directory: str) -> list[str]:
-    """List the files under a directory."""
+    """ディレクトリの下にあるファイルを一覧表示する。"""
     return [path for path in FILES if path.startswith(directory.rstrip("/") + "/")]
 
 
 @tool
 def read_file(path: str) -> str:
-    """Read a text file."""
-    return FILES.get(path, f"{path}: no such file")
+    """テキストファイルを読む。"""
+    return FILES.get(path, f"{path}: ファイルが見つかりません")
 
 
 @tool
 def send_email(to: str, subject: str, body: str) -> str:
-    """Send an email."""
+    """メールを送る。"""
     print(f"  [tool] send_email to={to} subject={subject!r}")
-    return f"sent to {to}"
+    return f"{to} に送信しました"
 
 
 @tool
 def delete_file(path: str) -> str:
-    """Delete a file."""
+    """ファイルを削除する。"""
     FILES.pop(path, None)
     print(f"  [tool] delete_file {path}")
-    return f"deleted {path}"
+    return f"{path} を削除しました"
 
 
 USER_REQUEST = (

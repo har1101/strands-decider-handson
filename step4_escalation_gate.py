@@ -29,27 +29,27 @@ from strands.interventions import Deny, InterventionHandler, Proceed  # noqa: E4
 MODEL_ID = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 SYSTEM_PROMPT = (
-    "You are a customer support assistant for a SaaS product. Answer general questions about "
-    "features, plans and how-to steps concisely, in the user's language."
+    "あなたは SaaS 製品のカスタマーサポート担当アシスタントです。"
+    "機能、プラン、使い方に関する一般的な質問に、簡潔に答えてください。"
 )
 
 QUESTIONS = {
     "route": Decider.choice(
-        "Who should handle this customer support message?",
+        "このサポートへの問い合わせは、誰が対応すべきですか？",
         {
-            "ai_assistant": (
-                "a general question an AI assistant can fully answer from product documentation: "
-                "how-to, features, plans, troubleshooting steps"
+            "AIアシスタント": (
+                "製品ドキュメントをもとに、AIアシスタントだけで十分に答えられる一般的な質問。"
+                "使い方、機能、プラン、トラブルシューティングの手順"
             ),
-            "human_agent": (
-                "needs a human staff member: refunds, billing disputes, compensation, account security "
-                "incidents, legal threats, or any action on the customer's own account or money"
+            "担当者": (
+                "人間のスタッフが必要な問い合わせ。返金、請求のトラブル、補償、"
+                "アカウントのセキュリティ事故、法的な脅し、お客様自身のアカウントやお金に関わる操作"
             ),
         },
     ),
 }
 
-# human_agent の確率がこれ以上なら人間へ。コード側が持つ方針のつまみ。
+# 「担当者」の確率がこれ以上なら人間へ。コード側が持つ方針のつまみ。
 HUMAN = 0.7
 
 HANDOFF_MESSAGE = "担当者におつなぎします。内容を確認のうえ、担当者からご連絡いたします。"
@@ -71,8 +71,8 @@ class EscalationGate(InterventionHandler):
             for block in message["content"]
             if "text" in block
         )
-        answer = self._decider.ask(f"A customer sent this message to support:\n{text}", QUESTIONS)["route"]
-        p_human = answer["probabilities"]["human_agent"]
+        answer = self._decider.ask(f"お客様がサポートに次のメッセージを送りました:\n{text}", QUESTIONS)["route"]
+        p_human = answer["probabilities"]["担当者"]
         route = "human" if p_human >= HUMAN else "llm"
         event.agent.state.set(
             "escalation",
@@ -94,10 +94,10 @@ def escalate_to_human(message: str, decision: dict) -> None:
 
 
 SAMPLE_REQUESTS = [
-    "How do I export my data as CSV?",
+    "データをCSVで書き出すにはどうすればいいですか？",
     "パスワードを忘れました。どうすればいいですか？",
-    "I was charged twice for order #1234. Refund me now.",
-    "Someone logged into my account from another country and changed my email.",
+    "注文番号1234で二重に請求されています。すぐに返金してください。",
+    "不正アクセスされました。身に覚えのない国からログインされ、メールアドレスを勝手に変更されています。",
     "二重に請求されています。返金してください。",
 ]
 
