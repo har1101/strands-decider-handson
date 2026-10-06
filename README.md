@@ -23,8 +23,8 @@ uv pip install strands-decider
 export NVPL_BLAS_DEBUG_CPU_TYPE=1
 
 strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
-  --state "Help! My payouts have been failing for 3 days!" \
-  --choice "Which team should handle this?=billing,sales,retail"
+  --state "助けて！請求金額が3日前からずっと間違っています！" \
+  --choice "どのチームが対応すべきですか？=請求,営業,技術"
 ```
 
 Step 3〜7 は、公式リポジトリをこのリポジトリの直下に clone して使う。`step*.py` は `strands-decider/examples/strands/_client.py` の `Decider` クライアントを読み込むので、このディレクトリ構成が前提になる。

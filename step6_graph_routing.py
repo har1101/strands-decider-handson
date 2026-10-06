@@ -7,9 +7,9 @@ Strands の純正機能 ``Graph`` で、受付 → 専門担当のワークフ�
 
 ワークフローの形はコードで固定し、分岐の判断だけを Decider に任せる。
 
-    受付(intake) ──[Decider: billing?]──> 請求担当(billing)
-                 ├─[Decider: tech?]─────> 技術担当(tech)
-                 └─[Decider: sales?]────> 営業担当(sales)
+    受付 ──[Decider: 請求?]──> 請求担当
+         ├─[Decider: 技術?]──> 技術担当
+         └─[Decider: 営業?]──> 営業担当
 
     strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8099
     python step6_graph_routing.py                          # 組み込みのサンプル問い合わせを順に流す

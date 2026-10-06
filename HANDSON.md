@@ -87,44 +87,44 @@ AWS は不要。初回実行時に Hugging Face からモデルがダウンロ�
 
 ```bash
 strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
-  --state "Help! My payouts have been failing for 3 days!" \
-  --choice "Which team should handle this?=billing,sales,retail"
+  --state "助けて！請求金額が3日前からずっと間違っています！" \
+  --choice "どのチームが対応すべきですか？=請求,営業,技術"
 ```
 
-公式 README の出力例:
+出力例:
 
 ```text
-choice_0 -> billing (confidence 0.768)
-  billing                  0.845
-  retail                   0.091
-  sales                    0.064
+choice_0 -> 請求 (confidence 0.398)
+    請求                       0.599
+    技術                       0.265
+    営業                       0.136
 ```
 
 ### noul(Yes/No)
 
 ```bash
 strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
-  --state "Help! My payouts have been failing for 3 days!" \
-  --noul "Does this convey urgency?"
+  --state "助けて！請求金額が3日前からずっと間違っています！" \
+  --noul "緊急性を感じさせますか？"
 ```
 
 ```text
-noul_0 noul = 0.828
+noul_0 noul = 0.789
 ```
 
 ### score(採点)
 
 ```bash
 strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
-  --state "Help! My payouts have been failing for 3 days!" \
-  --score "How frustrated is the writer?=calm,frustrated,depressed"
+  --state "助けて！請求金額が3日前からずっと間違っています！" \
+  --score "書き手はどれくらい苛立っていますか？=落ち着いている,苛立っている,落ち込んでいる"
 ```
 
 ```text
-score_0 score = 1.10 (confidence 0.518)
-  0: calm                                     0.163
-  1: frustrated                               0.573
-  2: depressed                                0.265
+score_0 score = 1.17 (confidence 0.516)
+    0: 落ち着いている                                  0.139
+    1: 苛立っている                                   0.552
+    2: 落ち込んでいる                                  0.310
 ```
 
 ### 複数の質問をまとめて投げる
@@ -133,10 +133,10 @@ state の読み込みが 1 回で済むので効率的。
 
 ```bash
 strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
-  --state "Help! My payouts have been failing for 3 days!" \
-  --choice "Which team should handle this?=billing,sales,retail" \
-  --noul "Does this convey urgency?" \
-  --score "How frustrated is the writer?=calm,frustrated,depressed"
+  --state "助けて！請求金額が3日前からずっと間違っています！" \
+  --choice "どのチームが対応すべきですか？=請求,営業,技術" \
+  --noul "緊急性を感じさせますか？" \
+  --score "書き手はどれくらい苛立っていますか？=落ち着いている,苛立っている,落ち込んでいる"
 ```
 
 **観察ポイント**: state や選択肢を変えると confidence がどう動くか。
@@ -161,29 +161,29 @@ strands-decider serve StrandsAgents/strands-decider-2B-hobson-v19 --port 8000
 curl -s localhost:8000/v1/systemone \
   -H 'content-type: application/json' \
   -d '{
-    "state": "Help! My payouts have been failing for 3 days!",
+    "state": "助けて！請求金額が3日前からずっと間違っています！",
     "questions": {
-      "is_urgent": {"type": "noul", "instructions": "Does this convey urgency?"}
+      "緊急か": {"type": "noul", "instructions": "緊急性を感じさせますか？"}
     }
   }'
 ```
 
-公式 README の出力例:
+出力例(t4g.xlarge、CPU):
 
 ```json
 {
   "model": "strands-decider-2B-hobson-v19",
   "answers": {
-    "is_urgent": {
+    "緊急か": {
       "type": "noul",
-      "noul": 0.8277
+      "noul": 0.7894
     }
   },
   "usage": {
-    "input_tokens": 86,
+    "input_tokens": 89,
     "output_tokens": 1
   },
-  "latency_ms": 140.03
+  "latency_ms": 3257.89
 }
 ```
 
@@ -210,6 +210,8 @@ python examples/strands/tool_call_intervention.py
 サンプルはポート 8099 のサーバーを使う。変えるときは `STRANDS_DECIDER_URL` で指定する。
 
 ### シナリオ
+
+このサンプルだけは公式のコードなので、Decider への質問文が英語。Step 4 以降は日本語に直してある。
 
 1. エージェントには `get_weather` ツールと、わざと「せっかち」にした system prompt が与えられている。
 2. ユーザーが場所を言わずに「What's the weather?」と聞くと、エージェントは都市を推測して `get_weather` を呼ぼうとする。
@@ -261,15 +263,15 @@ QUESTIONS = {
 | `Deny` | 人間側の分岐。invocation をキャンセルし、LLM は呼ばれない。`reason` がアシスタントの返答として会話に残る |
 | `agent.state` | 判定結果(route、確率、confidence)を呼び出し側に渡す |
 
-Decider への質問は `choice` 1 つ。`human_agent` の確率が 0.7 以上なら人間に回す。
+Decider への質問は `choice` 1 つ。「担当者」の確率が 0.7 以上なら人間に回す。
 
 ```python
 QUESTIONS = {
     "route": Decider.choice(
-        "Who should handle this customer support message?",
+        "このサポートへの問い合わせは、誰が対応すべきですか？",
         {
-            "ai_assistant": "a general question an AI assistant can fully answer from product documentation: ...",
-            "human_agent": "needs a human staff member: refunds, billing disputes, compensation, account security incidents, legal threats, ...",
+            "AIアシスタント": "製品ドキュメントをもとに、AIアシスタントだけで十分に答えられる一般的な質問。使い方、機能、プラン、...",
+            "担当者": "人間のスタッフが必要な問い合わせ。返金、請求のトラブル、補償、アカウントのセキュリティ事故、...",
         },
     ),
 }
@@ -282,26 +284,26 @@ python step4_escalation_gate.py                    # 組み込みのサンプル
 python step4_escalation_gate.py "返金してください"  # 任意の問い合わせを 1 件流す
 ```
 
-Lambda MicroVM(CPU)での実行例(抜粋):
+実行例(抜粋。t4g.xlarge、CPU):
 
 ```text
-USER: How do I export my data as CSV?
-  [gate] route=llm p_human=0.092 confidence=0.817 decider=1569ms llm_input_tokens=51
-  [llm] ASSISTANT: I'd be happy to help you export your data as CSV! ...
+USER: データをCSVで書き出すにはどうすればいいですか？
+  [gate] route=llm p_human=0.106 confidence=0.787 decider=5457ms llm_input_tokens=86
+  [llm] ASSISTANT: # CSVエクスポート方法 ...
 
-USER: I was charged twice for order #1234. Refund me now.
-  [gate] route=human p_human=0.964 confidence=0.928 decider=1515ms llm_input_tokens=0
-  [human] チケット起票: p_human=0.964 message='I was charged twice for order #1234. Refund me now.'
+USER: 注文番号1234で二重に請求されています。すぐに返金してください。
+  [gate] route=human p_human=0.862 confidence=0.723 decider=5452ms llm_input_tokens=0
+  [human] チケット起票: p_human=0.862 message='注文番号1234で二重に請求されています。すぐに返金してください。'
   ASSISTANT: 担当者におつなぎします。内容を確認のうえ、担当者からご連絡いたします。
 ```
 
 - 人間側の分岐では `llm_input_tokens=0` になり、LLM が呼ばれていないことがわかる。
 - `escalate_to_human()` はチケット起票を表示するだけ。実運用ではチケットシステムや Slack 通知に置き換える。
-- Decider の判定は CPU で 1 回約 1.5 秒かかった。
+- Decider の判定は t4g.xlarge(CPU)で 1 回約 5 秒かかった。
 
 **観察ポイント**:
 
-- `パスワードを忘れました。どうすればいいですか？` は `confidence=0.074` と低く、`p_human=0.463` で LLM 側に振られる。しきい値 `HUMAN` を下げたり、「confidence が低ければ人間へ」という条件を足したりすると、振り分けがどう変わるか。
+- `パスワードを忘れました。どうすればいいですか？` は `confidence=0.046` と低く、`p_human=0.523` で LLM 側に振られる。しきい値 `HUMAN` を下げたり、「confidence が低ければ人間へ」という条件を足したりすると、振り分けがどう変わるか。
 - 選択肢の説明文(`criteria`)を書き換えると確率がどう動くか。
 
 ## Step 5: どの LLM に答えさせるかを決める(モデルルーティング)
@@ -311,7 +313,7 @@ USER: I was charged twice for order #1234. Refund me now.
 | 使う機能 | 役割 |
 | --- | --- |
 | `ModelRouter` | 候補モデルの中から invocation ごとに 1 つを選んで使う。`Agent(model=router)` として渡す |
-| `RoutingCandidate` | 候補モデルに名前(`fast` / `strong`)を付ける。先頭の候補が既定値 |
+| `RoutingCandidate` | 候補モデルに名前(`軽量` / `高性能`)を付ける。先頭の候補が既定値 |
 | `RoutingStrategy.select` | どの候補を使うかを決める非同期メソッド。ここで Decider に問い合わせる |
 
 Strands 純正の `ClassifierStrategy` は、この判定自体を LLM に問い合わせる。Decider に置き換えると、判定がローカルの 1 回の forward pass で済む。`ModelRouter` は Strands 側で provisional(暫定)API とされている。
@@ -319,10 +321,10 @@ Strands 純正の `ClassifierStrategy` は、この判定自体を LLM に問い
 ```python
 QUESTIONS = {
     "model": Decider.choice(
-        "Which model should handle this request?",
+        "この依頼は、どのモデルが対応すべきですか？",
         {
-            "fast": "a small fast model is enough: greetings, short replies, translation of a phrase, ...",
-            "strong": "needs a strong reasoning model: multi-step analysis, design, debugging, planning, ...",
+            "軽量": "小さくて速いモデルで十分な依頼。あいさつ、短い返答、フレーズの翻訳、...",
+            "高性能": "推論力の高いモデルが必要な依頼。複数の手順にわたる分析、設計、デバッグ、計画、...",
         },
     ),
 }
@@ -340,32 +342,32 @@ python step5_model_router.py                                   # 組み込みの
 python step5_model_router.py "この文を英訳して: 了解です"     # 任意の依頼を 1 件流す
 ```
 
-Lambda MicroVM(CPU)での実行例(抜粋):
+実行例(抜粋。t4g.xlarge、CPU):
 
 ```text
-USER: Translate 'good morning' into French.
-  [router] fast -> jp.anthropic.claude-haiku-4-5-20251001-v1:0 confidence=0.955 decider=1386ms
-  [llm] total=2.3s input_tokens=39 output_tokens=40
+USER: 「おはよう」をフランス語に訳して
+  [router] 軽量 -> jp.anthropic.claude-haiku-4-5-20251001-v1:0 confidence=0.976 decider=4882ms
+  [llm] total=6.0s input_tokens=72 output_tokens=67
 
-USER: Debug why async Python code deadlocks when two tasks acquire two locks in a different order, and propose a fix.
-  [router] strong -> jp.anthropic.claude-sonnet-4-6 confidence=0.938 decider=1498ms
-  [llm] total=16.8s input_tokens=54 output_tokens=1465
+USER: 2つのタスクが2つのロックを逆の順番で取得すると、非同期のPythonコードがデッドロックする原因を調べて、修正案を出して
+  [router] 高性能 -> jp.anthropic.claude-sonnet-4-6 confidence=0.966 decider=5420ms
+  [llm] total=20.0s input_tokens=111 output_tokens=1527
 ```
 
 - 4 件とも意図どおりに振り分けられた(翻訳と言い換えは Haiku、デバッグとフェルミ推定は Sonnet)。
 - 実際にどのモデルが使われたかは、ロガー `strands.models.routing` を INFO レベルにすると `candidate selected` のログで確認できる。
 - `RoutingStrategy.select` は `async def` 必須。Decider クライアントは同期なので `asyncio.to_thread` で包む。
 
-**観察ポイント**: `『承知しました』を丁寧なビジネスメールの一文に言い換えて` は confidence 0.737 と、ほかより低い。境界にありそうな依頼(短いが専門的な質問など)を投げると、どちらに振られるか。
+**観察ポイント**: 4 件とも confidence が 0.94 以上で、迷いなく振り分けられた。境界にありそうな依頼(短いが専門的な質問など)を投げると、どちらに振られるか。
 
 ## Step 6: どのエージェントに渡すかを決める(Graph の条件付きエッジ)
 
-受付エージェントが問い合わせを 1 文の英語チケットに要約し、Decider がそのチケットを請求・技術・営業の担当エージェントに振り分ける。ワークフローの形はコードで固定し、分岐の判断だけを Decider に任せる。サンプルは `step6_graph_routing.py`。
+受付エージェントが問い合わせを 1 文の日本語チケットに要約し、Decider がそのチケットを請求・技術・営業の担当エージェントに振り分ける。ワークフローの形はコードで固定し、分岐の判断だけを Decider に任せる。サンプルは `step6_graph_routing.py`。
 
 ```text
-受付(intake) ──[Decider: billing?]──> 請求担当(billing)
-             ├─[Decider: tech?]─────> 技術担当(tech)
-             └─[Decider: sales?]────> 営業担当(sales)
+受付 ──[Decider: 請求?]──> 請求担当
+     ├─[Decider: 技術?]──> 技術担当
+     └─[Decider: 営業?]──> 営業担当
 ```
 
 | 使う機能 | 役割 |
@@ -377,15 +379,15 @@ USER: Debug why async Python code deadlocks when two tasks acquire two locks in 
 ```python
 @lru_cache(maxsize=128)
 def route(ticket: str) -> str:
-    return decider.ask(f"Support ticket: {ticket}", QUESTIONS)["team"]["choice"]
+    return decider.ask(f"サポートチケット: {ticket}", QUESTIONS)["team"]["choice"]
 
 def routed_to(team):
     def condition(state: GraphState) -> bool:
-        return route(str(state.results["intake"].result).strip()) == team
+        return route(str(state.results["受付"].result).strip()) == team
     return condition
 
 for team in TEAMS:
-    builder.add_edge("intake", team, condition=routed_to(team))
+    builder.add_edge("受付", team, condition=routed_to(team))
 ```
 
 ```bash
@@ -393,18 +395,18 @@ python step6_graph_routing.py                                 # 組み込みの�
 python step6_graph_routing.py "ログインすると500エラーが出ます"  # 任意の問い合わせを 1 件流す
 ```
 
-Lambda MicroVM(CPU)での実行例(抜粋):
+実行例(抜粋。t4g.xlarge、CPU):
 
 ```text
 USER: ログインすると500エラーが出ます
-  [intake] User cannot log in due to a 500 server error.
-  [route] tech confidence=0.975 decider=1417ms path=intake -> tech
-  [tech] ご報告ありがとうございます。ログイン時の500エラーについて確認させていただきたいのですが、...
+  [受付] ログイン時に500エラーが発生している。
+  [route] 技術 confidence=0.993 decider=4379ms path=受付 -> 技術
+  [技術] ログインに関する500エラーについてご報告いただきありがとうございます。...
 ```
 
-- 3 件とも意図どおりの担当に届いた(confidence 0.90〜0.98)。
+- 3 件とも意図どおりの担当に届いた(confidence 0.67〜0.99)。
 - 条件関数はエッジごとに呼ばれる(3 本なら 3 回)。同じ要約文の判定は `lru_cache` でキャッシュし、Decider の呼び出しを 1 問い合わせ 1 回に抑えている。
-- 受付エージェントに英語で要約させているのは、Decider の学習データが英語中心だから。要約がそのまま社内チケットの件名にもなる。
+- 受付エージェントの要約も日本語にしている。Decider の学習データは英語中心だが、日本語でも判定できた。要約がそのまま社内チケットの件名にもなる。
 
 **観察ポイント**: `TEAMS` に担当(例: `account`: ログイン・パスワード・アカウント設定)を足すと、ノードとエッジが増えるだけで振り分けが変わる。どの問い合わせの担当が入れ替わるか。
 
@@ -423,7 +425,7 @@ USER: ログインすると500エラーが出ます
 ```python
 def decider_classifier(event, **kwargs) -> ClassifierResult:
     tool_use = event.tool_use
-    state = f"tool={tool_use['name']}\ninput={json.dumps(tool_use['input'], ensure_ascii=False)}"
+    state = f"ツール名: {tool_use['name']}\n入力: {json.dumps(tool_use['input'], ensure_ascii=False)}"
     p = decider.ask(state, QUESTIONS)["needs_approval"]["noul"]
     return ClassifierResult(requires_human_in_the_loop=p >= 0.5, reason=f"Decider p={p:.2f}")
 
@@ -437,18 +439,18 @@ agent = Agent(
 python step7_tool_approval.py   # 承認を求められたら y/n で答える
 ```
 
-Lambda MicroVM(CPU)での実行例。メール送信は `y`、ファイル削除は `n` と答えた:
+実行例(t4g.xlarge、CPU)。メール送信は `y`、ファイル削除は `n` と答えた:
 
 ```text
 USER: docs フォルダのファイルを確認して README を要約し、alice@example.com にメールで送って。そのあと tmp/old.log を削除して。
 
-  [decider] list_files p=0.08 -> auto (1497ms)
-  [decider] read_file p=0.10 -> auto (1501ms)
-  [decider] send_email p=0.68 -> ask human (2307ms)
-Approve "send_email" — Decider p=0.68?
+  [decider] list_files p=0.06 -> auto (5260ms)
+  [decider] read_file p=0.07 -> auto (5245ms)
+  [decider] send_email p=0.74 -> ask human (6348ms)
+Approve "send_email" — Decider p=0.74?
   Input: {"to": "alice@example.com", ...} (y/n): y
-  [decider] delete_file p=0.69 -> ask human (1505ms)
-Approve "delete_file" — Decider p=0.69?
+  [decider] delete_file p=0.78 -> ask human (5180ms)
+Approve "delete_file" — Decider p=0.78?
   Input: {"path": "tmp/old.log"} (y/n): n
   [tool] send_email to=alice@example.com subject='README 要約'
 
@@ -458,7 +460,7 @@ remaining files: ['docs/CHANGELOG.md', 'docs/README.md', 'tmp/old.log']
 - 読むだけの `list_files` / `read_file` は承認なしで実行され、`send_email` と `delete_file` だけ承認を求められた。`n` と答えた削除は実行されず、ファイルは残った。
 - 承認プロンプトの `Input:` は `HumanInTheLoop` が `json.dumps` で表示するため、日本語は `\uXXXX` にエスケープされて見える。
 
-**観察ポイント**: 選択肢の説明文(`criteria`)の書き方で結果が変わる。最初に試した次の質問では、全社員宛ての `send_email` を「承認不要」(p=0.31)と判定した。
+**観察ポイント**: 選択肢の説明文(`criteria`)の書き方で結果が変わる。最初に(英語で)試した次の質問では、全社員宛ての `send_email` を「承認不要」(p=0.31)と判定した。
 
 ```python
 Decider.noul("Should a human approve this tool call before it runs?", {
